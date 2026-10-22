@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GhostSpace AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#EDF1F5;--ink:#14202B;--mute:#5E6B79;--line:#CBD4DD;--teal:#0E7C86;--amber:#D98E04;--violet:#5B4B8A;--rose:#B5446E;--panel:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'Bricolage Grotesque',system-ui,sans-serif}
+header{padding:28px 32px 0;max-width:1120px;margin:auto}
+h1{font-size:clamp(28px,4.4vw,46px);line-height:1.05;margin:0 0 8px;font-weight:800;letter-spacing:-.02em;max-width:18ch}
+h2{font-size:22px;margin:0 0 4px;font-weight:600}h3{font-size:16px;margin:0 0 8px;font-weight:600}
+.sub{color:var(--mute);max-width:62ch;margin:0 0 18px}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+nav button{font:inherit;background:none;border:0;padding:10px 16px;cursor:pointer;color:var(--mute);border-bottom:3px solid transparent;margin-bottom:-1px}
+nav button.on{color:var(--ink);font-weight:600;border-color:var(--teal)}
+nav button:focus-visible,.pill:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+main{max-width:1120px;margin:auto;padding:24px 32px 64px}
+section{display:none}section.on{display:block}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin:20px 0}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px}
+.stats{display:flex;gap:28px;flex-wrap:wrap;margin:16px 0}
+.stat b{display:block;font-size:30px;line-height:1.1;font-weight:800}.stat span{color:var(--mute);font-size:14px}
+.ribbon{display:grid;grid-template-columns:70px repeat(24,1fr);gap:2px;font-size:11px;color:var(--mute);align-items:center}
+.cell{height:30px;border-radius:2px;background:#E4EAF0}
+.cell.ghost{background:repeating-linear-gradient(135deg,var(--amber) 0 4px,#F4D58B 4px 8px)}
+.legend{display:flex;gap:18px;font-size:13px;color:var(--mute);margin-top:12px;flex-wrap:wrap}.legend i{display:inline-block;width:14px;height:14px;border-radius:2px;vertical-align:-2px;margin-right:6px}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}th{font-weight:600;color:var(--mute)}tr.best td{background:#E3F2F3;font-weight:600}
+.tw{overflow-x:auto}ul{padding-left:18px;margin:6px 0}li{margin:4px 0}
+.pill{font:inherit;border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 14px;cursor:pointer;margin:0 6px 8px 0}.pill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+canvas{max-height:300px}.cm td{text-align:center;width:25%}
+label{display:grid;grid-template-columns:90px 1fr 64px;gap:10px;align-items:center;margin:10px 0;font-size:14px}
+input[type=range]{width:100%;accent-color:var(--teal)}input[type=number]{width:80px;font:inherit;padding:3px 6px}
+.big{font-size:48px;font-weight:800;line-height:1}.bar{height:10px;background:#E4EAF0;border-radius:5px;overflow:hidden;margin:3px 0 8px}.bar i{display:block;height:100%;background:var(--teal)}
+.alert{padding:10px 12px;border-left:4px solid var(--teal);background:#E3F2F3;margin-top:12px}.alert.g{border-color:var(--amber);background:#FBF0D6}
+.note{font-size:13px;color:var(--mute)}
+@media(max-width:600px){header,main{padding-left:16px;padding-right:16px}label{grid-template-columns:70px 1fr 56px}}
+</style></head><body>
+<header>
+<h1>When is this room lit but empty?</h1>
+<p class="sub" id="lede">Loading sensor analysis…</p>
+<nav role="tablist"><button class="on" data-t="patterns">Usage patterns</button><button data-t="models">Predicting occupancy</button><button data-t="clusters">Hidden states</button><button data-t="live">Try a reading</button></nav>
+</header>
+<main>
+<section id="patterns" class="on">
+ <div class="box"><h2>Every hour of the recording</h2><p class="note">Teal = people present (darker means more). Hatched amber = lights on while nobody is there. Grey = quiet.</p>
+  <div class="ribbon" id="ribbon"></div>
+  <div class="legend"><span><i style="background:#0E7C86"></i>Occupied</span><span><i style="background:repeating-linear-gradient(135deg,#D98E04 0 3px,#F4D58B 3px 6px)"></i>Lit but empty (ghost)</span><span><i style="background:#E4EAF0"></i>Empty and dark / no data</span></div></div>
+ <div class="stats" id="stats"></div>
+ <div class="row"><div class="box"><h3>Average by hour of day</h3><canvas id="cHour"></canvas></div>
+  <div class="box"><h3>Space state by hour (clustering)</h3><canvas id="cState"></canvas></div></div>
+ <div class="box"><h3>What the building should do</h3><ul id="insights"></ul>
+  <p>Lighting load of this room <input type="number" id="kw" value="0.4" step="0.1" min="0" aria-label="Lighting load in kilowatts"> kW → <b id="kwh"></b> kWh wasted in this recording.</p></div>
+</section>
+
+<section id="models">
+ <div class="row"><div class="box"><h2>Data and preprocessing</h2><ul id="steps"></ul></div>
+  <div class="box"><h3>Feature selection (mutual information)</h3><canvas id="cFeat"></canvas><p class="note">Dark bars were kept by SelectKBest.</p></div></div>
+ <div class="box"><h2>Classification: how many people are in the room?</h2><p class="note">Held-out 25% test set. Precision, recall and F1 are macro-averaged over the four counts; time-split F1 trains on the first 75% of time and tests on the last 25%, a stricter check.</p>
+  <div class="tw"><table id="tCls"></table></div></div>
+ <div class="row"><div class="box"><h3>ROC: occupied vs empty</h3><canvas id="cRoc"></canvas></div>
+  <div class="box"><h3 id="cmT">Confusion matrix</h3><div class="tw"><table class="cm" id="cm"></table></div><p class="note">Rows are the true count, columns the predicted count.</p></div></div>
+ <div class="row"><div class="box"><h3>Convergence: logistic regression (SGD) log-loss</h3><canvas id="cConv"></canvas><p class="note" id="convN"></p></div>
+  <div class="box"><h3>KNN: choosing k (5-fold CV F1)</h3><canvas id="cK"></canvas></div></div>
+ <div class="box"><h2>Regression: estimating the head-count</h2><div class="tw"><table id="tReg"></table></div><div style="max-width:420px"><canvas id="cReg"></canvas></div></div>
+</section>
+
+<section id="clusters">
+ <div class="box"><h2>Hidden structure without using the labels</h2><p class="note">K-Means, hierarchical (Ward) and a Gaussian mixture see only sensor readings. We then check how well their groups line up with the real head-count.</p>
+  <div id="pills"></div><canvas id="cPca"></canvas><p class="note" id="pcaN"></p></div>
+ <div class="row"><div class="box"><h3>Silhouette by number of clusters</h3><canvas id="cSil"></canvas></div>
+  <div class="box"><h3>K-Means elbow (inertia)</h3><canvas id="cEl"></canvas></div>
+  <div class="box"><h3>GMM model selection (BIC, AIC)</h3><canvas id="cBic"></canvas></div></div>
+ <div class="row"><div class="box"><h3 id="cmpT">Algorithm comparison</h3><div class="tw"><table id="tCmp"></table></div><p class="note">ARI and NMI measure agreement with true occupancy; silhouette and Davies-Bouldin judge cluster shape alone (higher silhouette and lower Davies-Bouldin are better).</p></div>
+  <div class="box"><h3>Deployed usage states (K-Means, k=3)</h3><div class="tw"><table id="tProf"></table></div></div></div>
+</section>
+
+<section id="live">
+ <div class="row"><div class="box"><h2>Sensor reading</h2><p class="note">Load a real reading from the dataset, then adjust the sensors.</p>
+  <div id="loaders"></div><div id="sliders"></div></div>
+  <div class="box"><h2>Model output</h2><div id="out"><p class="note">Move a slider or load a reading.</p></div></div></div>
+</section>
+</main>
+<script>
+const C={teal:'#0E7C86',amber:'#D98E04',violet:'#5B4B8A',rose:'#B5446E',ink:'#14202B',mute:'#9AA6B2'};
+const $=s=>document.querySelector(s),ch={};
+Chart.defaults.font.family="'Bricolage Grotesque',system-ui,sans-serif";
+const mk=(id,cfg)=>{ch[id]?.destroy();ch[id]=new Chart($('#'+id),cfg)};
+const fmt=(v,d=3)=>Number(v).toFixed(d), pct=v=>(v*100).toFixed(0)+'%';
+const table=(el,head,rows,bestIdx)=>{$(el).innerHTML='<tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>'+rows.map((r,i)=>`<tr class="${i===bestIdx?'best':''}">`+r.map(c=>`<td>${c}</td>`).join('')+'</tr>').join('')};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,section').forEach(e=>e.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.t).classList.add('on')});
+let R,AG=['temp','light','sound','co2','slope','pir'];
+fetch('/api/results').then(r=>r.json()).then(r=>{R=r;patterns();models();clusters();live()});
+
+function patterns(){
+ const P=R.patterns,m=R.meta;
+ $('#lede').textContent=`${m.rows.toLocaleString()} sensor readings from ${m.sensors} sensors (${m.source}). We estimate how many people are present, find recurring usage states, and flag lit-but-empty periods.`;
+ let h='<div></div>'+[...Array(24).keys()].map(i=>`<div style="text-align:center">${i%3?'':i}</div>`).join('');
+ P.days.forEach(d=>{h+=`<div>${d}</div>`;for(let i=0;i<24;i++){const g=P.grid.find(x=>x.day===d&&x.hour===i);
+  if(!g)h+='<div class="cell" style="opacity:.4" title="no data"></div>';
+  else if(g.ghost>=.25)h+=`<div class="cell ghost" style="opacity:${.55+.45*g.ghost}" title="${d} ${i}:00 - lit but empty ${pct(g.ghost)} of the hour"></div>`;
+  else h+=`<div class="cell" style="background:${g.occ>0.05?`rgba(14,124,134,${.15+.85*g.occ/3})`:''}" title="${d} ${i}:00 - avg ${fmt(g.occ,1)} people"></div>`}});
+ $('#ribbon').innerHTML=h;
+ $('#stats').innerHTML=[[P.total_h+' h','recorded'],[P.occupied_h+' h','someone present'],[P.lit_h+' h','lights on'],[P.ghost_h+' h','lit but empty']].map(s=>`<div class="stat"><b>${s[0]}</b><span>${s[1]}</span></div>`).join('');
+ const H=P.hourly,hs=H.map(x=>x.hour+':00');
+ mk('cHour',{data:{labels:hs,datasets:[{type:'bar',label:'Lit but empty (share of hour)',data:H.map(x=>x.ghost),backgroundColor:C.amber,yAxisID:'y'},{type:'line',label:'Average people',data:H.map(x=>x.occ),borderColor:C.teal,backgroundColor:C.teal,yAxisID:'y1',tension:.3,pointRadius:2}]},options:{scales:{y:{max:1,title:{display:true,text:'ghost share'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'people'}},x:{ticks:{maxTicksLimit:12}}}}});
+ mk('cState',{type:'bar',data:{labels:hs,datasets:[['Vacant','vacant',C.mute],['Light use','light',C.violet],['Busy','busy',C.teal]].map(([n,k,c])=>({label:n,data:H.map(x=>x[k]),backgroundColor:c}))},options:{scales:{x:{stacked:true,ticks:{maxTicksLimit:12}},y:{stacked:true,max:1}}}});
+ $('#insights').innerHTML=P.insights.map(t=>`<li>${t}</li>`).join('');
+ const k=()=>$('#kwh').textContent=(P.ghost_h*$('#kw').value).toFixed(1);$('#kw').oninput=k;k();
+}
+function models(){
+ const c=R.classification,r=R.regression,m=R.meta;
+ $('#steps').innerHTML=m.steps.map(s=>`<li>${s}</li>`).join('')+`<li>Class balance (0/1/2/3 people): ${m.class_counts.join(' / ')} - hence macro-averaged metrics</li>`;
+ mk('cFeat',{type:'bar',data:{labels:c.features.map(f=>f.name),datasets:[{data:c.features.map(f=>f.mi),backgroundColor:c.features.map(f=>f.selected?C.teal:'#C9D2DB')}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10},autoSkip:false}}}}});
+ $('#cFeat').parentElement.style.height='420px';
+ const bi=c.table.findIndex(t=>t.model===c.best);
+ table('#tCls',['Model','Accuracy','Precision','Recall','F1','ROC-AUC (OvR)','Binary AUC','CV F1 ± sd','Time-split F1'],c.table.map(t=>[t.model,fmt(t.accuracy),fmt(t.precision),fmt(t.recall),fmt(t.f1),fmt(t.roc_auc_ovr),fmt(t.roc_auc_binary),`${fmt(t.cv_f1)} ± ${fmt(t.cv_sd)}`,fmt(t.time_split_f1)]),bi);
+ const cols=[C.teal,C.violet,C.amber];
+ mk('cRoc',{type:'scatter',data:{datasets:[...c.table.map((t,i)=>({label:`${t.model} (AUC ${fmt(t.roc_auc_binary,3)})`,data:t.roc.fpr.map((x,j)=>({x,y:t.roc.tpr[j]})),showLine:true,borderColor:cols[i],pointRadius:0,borderWidth:2})),{label:'Chance',data:[{x:0,y:0},{x:1,y:1}],showLine:true,borderColor:C.mute,borderDash:[4,4],pointRadius:0}]},options:{scales:{x:{min:0,max:1,title:{display:true,text:'False positive rate'}},y:{min:0,max:1,title:{display:true,text:'True positive rate'}}}}});
+ const cm=c.table[bi].cm;$('#cmT').textContent='Confusion matrix: '+c.best;
+ $('#cm').innerHTML='<tr><th></th>'+[0,1,2,3].map(i=>`<th>pred ${i}</th>`).join('')+'</tr>'+cm.map((row,i)=>{const s=row.reduce((a,b)=>a+b,0)||1;return`<tr><th>true ${i}</th>`+row.map((v,j)=>`<td style="background:rgba(14,124,134,${v/s*.8});color:${v/s>.5?'#fff':'inherit'}">${v}</td>`).join('')+'</tr>'}).join('');
+ mk('cConv',{type:'line',data:{labels:c.convergence.map(x=>x.epoch),datasets:[{label:'Train',data:c.convergence.map(x=>x.train),borderColor:C.teal,pointRadius:0},{label:'Validation',data:c.convergence.map(x=>x.val),borderColor:C.rose,pointRadius:0}]},options:{scales:{x:{title:{display:true,text:'epoch'}},y:{title:{display:true,text:'log-loss'}}}}});
+ const last=c.convergence.at(-1),first=c.convergence[0];$('#convN').textContent=`Loss falls from ${first.val} to ${last.val} and flattens; the standard L-BFGS solver converged in ${c.lbfgs_iterations} iterations.`;
+ mk('cK',{type:'line',data:{labels:c.k_curve.map(x=>x.k),datasets:[{label:'CV F1',data:c.k_curve.map(x=>x.f1),borderColor:C.violet,backgroundColor:C.violet}]},options:{plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'k neighbours'}}}}});
+ table('#tReg',['Model','MAE','RMSE','R²','Rounded accuracy'],r.table.map(t=>[t.model,fmt(t.mae),fmt(t.rmse),fmt(t.r2),fmt(t.rounded_acc)]),r.table.findIndex(t=>t.model===r.best));
+ const j=()=>(Math.random()-.5)*.25;
+ mk('cReg',{type:'scatter',data:{datasets:[{label:'Test readings (jittered)',data:r.scatter.true.map((x,i)=>({x:x+j(),y:r.scatter.pred[i]})),backgroundColor:'rgba(14,124,134,.5)',pointRadius:3}]},options:{scales:{x:{title:{display:true,text:'actual people'}},y:{title:{display:true,text:'predicted'}}}}});
+}
+function clusters(){
+ const cl=R.clustering,sw=cl.sweep,sc=cl.scatter,ks=sw.map(x=>x.k);
+ const cc=[C.mute,C.teal,C.violet,C.amber,C.rose],names={true:'True occupancy','K-Means':'K-Means','Hierarchical (Ward)':'Hierarchical (Ward)',GMM:'GMM'};
+ const draw=key=>{const k=key==='true'?'true':key;const groups=[...new Set(sc[k])].sort();
+  mk('cPca',{type:'scatter',data:{datasets:groups.map(g=>({label:(key==='true'?g+' people':'Cluster '+g),data:sc.x.map((x,i)=>sc[k][i]===g?{x,y:sc.y[i]}:null).filter(Boolean),backgroundColor:cc[g%5]+'AA',pointRadius:3}))},options:{scales:{x:{title:{display:true,text:`PC1 (${pct(sc.var[0])} variance)`}},y:{title:{display:true,text:`PC2 (${pct(sc.var[1])})`}}}}});
+  $('#pcaN').textContent=key==='true'?'Reference view: the real head-count projected onto the two main sensor directions.':'Colours are discovered groups, not labels. Compare with the reference view.'};
+ $('#pills').innerHTML=Object.keys(names).map((k,i)=>`<button class="pill ${i?'':'on'}" data-k="${k}">${names[k]}</button>`).join('');
+ document.querySelectorAll('#pills .pill').forEach(b=>b.onclick=()=>{document.querySelectorAll('#pills .pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');draw(b.dataset.k)});draw('true');
+ const L=(l,d,c)=>({label:l,data:d,borderColor:c,backgroundColor:c});
+ mk('cSil',{type:'line',data:{labels:ks,datasets:[L('K-Means',sw.map(x=>x.km_sil),C.teal),L('Hierarchical',sw.map(x=>x.hc_sil),C.violet),L('GMM',sw.map(x=>x.gmm_sil),C.amber)]},options:{scales:{x:{title:{display:true,text:'k'}}}}});
+ mk('cEl',{type:'line',data:{labels:ks,datasets:[L('Inertia',sw.map(x=>x.km_inertia),C.teal)]},options:{plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'k'}}}}});
+ mk('cBic',{type:'line',data:{labels:ks,datasets:[L('BIC',sw.map(x=>x.gmm_bic),C.amber),L('AIC',sw.map(x=>x.gmm_aic),C.violet)]},options:{scales:{x:{title:{display:true,text:'k'}}}}});
+ $('#cmpT').textContent=`Algorithm comparison at k=${cl.k_compare}`;
+ table('#tCmp',['Algorithm','Silhouette','Davies-Bouldin','ARI','NMI'],cl.compare.map(t=>[t.algo,fmt(t.silhouette),fmt(t.davies_bouldin),fmt(t.ari),fmt(t.nmi)]),cl.compare.reduce((b,t,i,a)=>t.ari>a[b].ari?i:b,0));
+ table('#tProf',['State','Time share','Avg people','Light','CO₂ ppm','Sound'],cl.profile.map(p=>[p.state,p.share+'%',p.occ,p.light,p.co2,p.sound]));
+}
+function live(){
+ const meta={temp:['Temperature','°C',.1],light:['Light','lux',1],sound:['Sound','',.01],co2:['CO₂','ppm',1],slope:['CO₂ slope','',.1],pir:['Motion (PIR)','sensors',1]};
+ $('#sliders').innerHTML=AG.map(k=>{const [lo,hi]=R.ranges[k];return`<label>${meta[k][0]}<input type="range" id="s_${k}" min="${lo}" max="${hi}" step="${meta[k][2]}" value="${lo}"><span id="v_${k}"></span></label>`}).join('');
+ $('#loaders').innerHTML=[0,1,2,3].map(n=>`<button class="pill" data-n="${n}">Real reading: ${n===0?'empty':n+(n>1?' people':' person')}</button>`).join('');
+ const val=()=>Object.fromEntries(AG.map(k=>[k,+$('#s_'+k).value]));
+ const show=()=>AG.forEach(k=>$('#v_'+k).textContent=(+$('#s_'+k).value).toFixed(meta[k][2]<1?1:0)+' '+(meta[k][1]==='sensors'?'':meta[k][1]));
+ let tm;const run=()=>{show();clearTimeout(tm);tm=setTimeout(()=>fetch('/api/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(val())}).then(r=>r.json()).then(o=>{
+  $('#out').innerHTML=`<div class="big">${o.label}</div><p class="note">Regression estimate: ${o.regression} people · Usage state: ${o.state}</p>`+o.proba.map((p,i)=>`<div>${i} ${i===1?'person':'people'} <span class="note">${pct(p)}</span></div><div class="bar"><i style="width:${p*100}%"></i></div>`).join('')+`<div class="alert ${o.ghost?'g':''}">${o.advice}</div>`}),150)};
+ document.querySelectorAll('#loaders .pill').forEach(b=>b.onclick=()=>fetch('/api/sample?count='+b.dataset.n).then(r=>r.json()).then(s=>{AG.forEach(k=>$('#s_'+k).value=s[k]);run()}));
+ document.querySelectorAll('#sliders input').forEach(i=>i.oninput=run);
+ fetch('/api/sample?count=2').then(r=>r.json()).then(s=>{AG.forEach(k=>$('#s_'+k).value=s[k]);run()});
+}
+</script></body></html>

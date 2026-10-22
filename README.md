@@ -30,3 +30,5 @@ Without the CSV, `train.py` falls back to a synthetic dataset with the identical
 - **Clusters never see labels;** labels are used only afterwards (ARI/NMI) to judge them.
 - **API inputs:** the UI sends 6 aggregates; `features.from_aggregates` expands them to the 16 raw sensors using a typical occupied reading as template.
 - Hierarchical clustering is evaluated on a 4,000-row subsample (O(n^2) memory).
+
+Link: https://ghostspace.onrender.com/

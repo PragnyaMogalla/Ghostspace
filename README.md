@@ -1,5 +1,9 @@
 # GhostSpace AI - Discovering Hidden Room-Usage Patterns
 
+B1_B1_10 Pragnya Sai Sowmya Mogalla
+ML Project: Predicting wasted building resources by invisible occupancy
+Dataset: https://archive.ics.uci.edu/dataset/864/room%2Boccupancy%2Bestimation?utm_source=chatgpt.com
+
 Smart-building ML project: estimate how many people are in a room from cheap sensors (temperature, light, sound, CO2, PIR motion),
 find recurring usage states, and flag **ghost periods** - lights on while nobody is present.
 

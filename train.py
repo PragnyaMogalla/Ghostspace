@@ -10,9 +10,9 @@ from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif, f_regression, mutual_info_classif
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, SGDClassifier
+from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge
 from sklearn.metrics import (accuracy_score, adjusted_rand_score, confusion_matrix, davies_bouldin_score,
-                             f1_score, log_loss, mean_absolute_error, mean_squared_error,
+                             f1_score, mean_absolute_error, mean_squared_error,
                              normalized_mutual_info_score, precision_score, r2_score, recall_score,
                              silhouette_score)
 from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split
@@ -137,17 +137,8 @@ def run_classification(d):
         fitted[name] = p
     best = max(out, key=lambda r: r["f1"])["model"]
 
-    # convergence: SGD logistic regression, log-loss per epoch
-    pre = Pipeline(list(fitted[best].steps[:3])) if False else pipe(GaussianNB()).fit(Xtr, ytr)
-    Ztr, Zte = pre[:-1].transform(Xtr), pre[:-1].transform(Xte)
-    sgd = SGDClassifier(loss="log_loss", alpha=1e-4, random_state=SEED); conv = []
-    for ep in range(1, 41):
-        sgd.partial_fit(Ztr, ytr, classes=[0, 1, 2, 3])
-        conv.append({"epoch": ep, "train": rnd(log_loss(ytr, sgd.predict_proba(Ztr), labels=[0, 1, 2, 3])),
-                     "val": rnd(log_loss(yte, sgd.predict_proba(Zte), labels=[0, 1, 2, 3]))})
-    lr_iters = int(fitted["Logistic Regression"].named_steps["m"].n_iter_[0])
-    return {"table": out, "best": best, "features": feat, "k_curve": k_curve, "convergence": conv,
-            "lbfgs_iterations": lr_iters, "n_train": len(Xtr), "n_test": len(Xte)}, fitted[best], best
+    return {"table": out, "best": best, "features": feat, "k_curve": k_curve,
+            "n_train": len(Xtr), "n_test": len(Xte)}, fitted[best], best
 
 
 # ---------------------------------------------------------------- 3. REGRESSION

@@ -14,8 +14,7 @@ from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, SG
 from sklearn.metrics import (accuracy_score, adjusted_rand_score, confusion_matrix, davies_bouldin_score,
                              f1_score, log_loss, mean_absolute_error, mean_squared_error,
                              normalized_mutual_info_score, precision_score, r2_score, recall_score,
-                             roc_auc_score, roc_curve, silhouette_score)
-from sklearn.mixture import GaussianMixture
+                             silhouette_score)
 from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
@@ -95,7 +94,7 @@ def preprocess(raw):
     steps.append(f"Engineered {len(ENG)} features: sensor means/max/spread, PIR sum, log(CO2)")
     d["hour"], d["day"] = d.ts.dt.hour, d.ts.dt.strftime("%a %d %b")
     d["occ"] = d["Room_Occupancy_Count"].astype(int)
-    steps.append("Target: occupant count 0-3 (multi-class), plus occupied/empty (binary) for ROC analysis")
+    steps.append("Target: occupant count 0-3 (multi-class classification and regression)")
     steps.append("Standardised all features (z-score) - required for KNN distances and logistic regression")
     steps.append(f"Feature selection: SelectKBest keeps the top {K_SELECT} of {len(FEATS)} features inside every pipeline")
     return d, steps
@@ -123,23 +122,18 @@ def run_classification(d):
               "Gaussian Naive Bayes": pipe(GaussianNB())}
     dd = d.sort_values("ts"); cut = int(len(dd) * .75)
     out, fitted = [], {}
-    yo = (yte > 0).astype(int)
     for name, p in models.items():
         t0 = time.time(); p.fit(Xtr, ytr); ft = time.time() - t0
-        pred, pr = p.predict(Xte), p.predict_proba(Xte)
-        fpr, tpr, _ = roc_curve(yo, 1 - pr[:, 0]); idx = np.unique(np.linspace(0, len(fpr) - 1, 60).astype(int))
+        pred = p.predict(Xte)
         tp = clone(p).fit(dd[FEATS][:cut], dd["occ"][:cut]).predict(dd[FEATS][cut:])
         cv = cross_val_score(clone(p), Xtr, ytr, cv=5, scoring="f1_macro")
         out.append({"model": name, "accuracy": rnd(accuracy_score(yte, pred)),
                     "precision": rnd(precision_score(yte, pred, average="macro", zero_division=0)),
                     "recall": rnd(recall_score(yte, pred, average="macro", zero_division=0)),
                     "f1": rnd(f1_score(yte, pred, average="macro")),
-                    "roc_auc_ovr": rnd(roc_auc_score(yte, pr, multi_class="ovr", average="macro")),
-                    "roc_auc_binary": rnd(roc_auc_score(yo, 1 - pr[:, 0])),
                     "cv_f1": rnd(cv.mean()), "cv_sd": rnd(cv.std()),
                     "time_split_f1": rnd(f1_score(dd["occ"][cut:], tp, average="macro", labels=sorted(set(dd["occ"][cut:])), zero_division=0)),
-                    "fit_s": rnd(ft, 3), "cm": confusion_matrix(yte, pred, labels=[0, 1, 2, 3]).tolist(),
-                    "roc": {"fpr": fpr[idx].round(4).tolist(), "tpr": tpr[idx].round(4).tolist()}})
+                    "fit_s": rnd(ft, 3), "cm": confusion_matrix(yte, pred, labels=[0, 1, 2, 3]).tolist()})
         fitted[name] = p
     best = max(out, key=lambda r: r["f1"])["model"]
 
@@ -184,15 +178,12 @@ def run_clustering(d):
     sweep = []
     for k in range(2, 9):
         km = KMeans(k, n_init=10, random_state=SEED).fit(Xc)
-        gm = GaussianMixture(k, covariance_type="full", reg_covar=1e-3, n_init=2, random_state=SEED).fit(Xc)
         hl = AgglomerativeClustering(k, linkage="ward").fit_predict(Xs)
         sweep.append({"k": k, "km_inertia": rnd(km.inertia_, 1), "km_sil": rnd(silhouette_score(Xc, km.labels_, sample_size=4000, random_state=SEED)),
-                      "km_db": rnd(davies_bouldin_score(Xc, km.labels_)), "gmm_bic": rnd(gm.bic(Xc), 1), "gmm_aic": rnd(gm.aic(Xc), 1),
-                      "gmm_sil": rnd(silhouette_score(Xs, gm.predict(Xs))), "hc_sil": rnd(silhouette_score(Xs, hl)), "hc_db": rnd(davies_bouldin_score(Xs, hl))})
+                      "km_db": rnd(davies_bouldin_score(Xc, km.labels_)), "hc_sil": rnd(silhouette_score(Xs, hl)), "hc_db": rnd(davies_bouldin_score(Xs, hl))})
     K = 4   # four occupancy levels (0-3) -> fair comparison against the ground truth
     km = KMeans(K, n_init=10, random_state=SEED).fit(Xc)
-    gm = GaussianMixture(K, covariance_type="full", reg_covar=1e-3, n_init=2, random_state=SEED).fit(Xc)
-    lab = {"K-Means": km.predict(Xs), "Hierarchical (Ward)": AgglomerativeClustering(K, linkage="ward").fit_predict(Xs), "GMM": gm.predict(Xs)}
+    lab = {"K-Means": km.predict(Xs), "Hierarchical (Ward)": AgglomerativeClustering(K, linkage="ward").fit_predict(Xs)}
     comp = [{"algo": a, "silhouette": rnd(silhouette_score(Xs, l)), "davies_bouldin": rnd(davies_bouldin_score(Xs, l)),
              "ari": rnd(adjusted_rand_score(ys, l)), "nmi": rnd(normalized_mutual_info_score(ys, l))} for a, l in lab.items()]
     pc = PCA(2, random_state=SEED).fit(Xc); P = pc.transform(Xs)[:900]

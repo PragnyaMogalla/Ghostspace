@@ -60,7 +60,7 @@ input[type=range]{width:100%;accent-color:var(--teal)}input[type=number]{width:8
  <div class="box"><h2>Classification: how many people are in the room?</h2><p class="note">Held-out 25% test set. Precision, recall and F1 are macro-averaged over the four counts; time-split F1 trains on the first 75% of time and tests on the last 25%, a stricter check.</p>
   <div class="tw"><table id="tCls"></table></div></div>
  <div class="row"><div class="box"><h3 id="cmT">Confusion matrix</h3><div class="tw"><table class="cm" id="cm"></table></div><p class="note">Rows are the true count, columns the predicted count.</p></div></div>
- <div class="row"><div class="box"><h3>Convergence: logistic regression (SGD) log-loss</h3><canvas id="cConv"></canvas><p class="note" id="convN"></p></div>
+ <div class="row">
   <div class="box"><h3>KNN: choosing k (5-fold CV F1)</h3><canvas id="cK"></canvas></div></div>
  <div class="box"><h2>Regression: estimating the head-count</h2><div class="tw"><table id="tReg"></table></div><div style="max-width:420px"><canvas id="cReg"></canvas></div></div>
 </section>
@@ -117,8 +117,6 @@ function models(){
  table('#tCls',['Model','Accuracy','Precision','Recall','F1','CV F1 ± sd','Time-split F1'],c.table.map(t=>[t.model,fmt(t.accuracy),fmt(t.precision),fmt(t.recall),fmt(t.f1),`${fmt(t.cv_f1)} ± ${fmt(t.cv_sd)}`,fmt(t.time_split_f1)]),bi);
   const cm=c.table[bi].cm;$('#cmT').textContent='Confusion matrix: '+c.best;
  $('#cm').innerHTML='<tr><th></th>'+[0,1,2,3].map(i=>`<th>pred ${i}</th>`).join('')+'</tr>'+cm.map((row,i)=>{const s=row.reduce((a,b)=>a+b,0)||1;return`<tr><th>true ${i}</th>`+row.map((v,j)=>`<td style="background:rgba(14,124,134,${v/s*.8});color:${v/s>.5?'#fff':'inherit'}">${v}</td>`).join('')+'</tr>'}).join('');
- mk('cConv',{type:'line',data:{labels:c.convergence.map(x=>x.epoch),datasets:[{label:'Train',data:c.convergence.map(x=>x.train),borderColor:C.teal,pointRadius:0},{label:'Validation',data:c.convergence.map(x=>x.val),borderColor:C.rose,pointRadius:0}]},options:{scales:{x:{title:{display:true,text:'epoch'}},y:{title:{display:true,text:'log-loss'}}}}});
- const last=c.convergence.at(-1),first=c.convergence[0];$('#convN').textContent=`Loss falls from ${first.val} to ${last.val} and flattens; the standard L-BFGS solver converged in ${c.lbfgs_iterations} iterations.`;
  mk('cK',{type:'line',data:{labels:c.k_curve.map(x=>x.k),datasets:[{label:'CV F1',data:c.k_curve.map(x=>x.f1),borderColor:C.violet,backgroundColor:C.violet}]},options:{plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'k neighbours'}}}}});
  table('#tReg',['Model','MAE','RMSE','R²','Rounded accuracy'],r.table.map(t=>[t.model,fmt(t.mae),fmt(t.rmse),fmt(t.r2),fmt(t.rounded_acc)]),r.table.findIndex(t=>t.model===r.best));
  const j=()=>(Math.random()-.5)*.25;
